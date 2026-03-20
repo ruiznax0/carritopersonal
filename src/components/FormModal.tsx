@@ -13,20 +13,33 @@ export default function FormModal({ modalState, onClose, onSubmit }: FormModalPr
   const { type, editData } = modalState;
   const isEdit = !!editData;
 
-  const title = `${isEdit ? 'Editar' : 'Añadir'} ${type === 'category' ? 'Ambiente' : type === 'product' ? 'Producto' : 'Alternativa'
-    }`;
+  const title = `${isEdit ? 'Editar' : 'Añadir'} ${
+    type === 'category' ? 'Ambiente' : type === 'product' ? 'Producto' : 'Alternativa'
+  }`;
 
-  // Helper to get field value from editData safely
   const getVal = (field: string): string => {
     if (!editData) return '';
     return String((editData as unknown as Record<string, unknown>)[field] ?? '');
   };
 
+  const inputClass =
+    'w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none placeholder-zinc-600';
+
+  const labelClass = 'block text-[11px] font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider';
+
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-full max-w-md p-6 m-auto">
-        <div className="flex justify-between items-center mb-5">
-          <h2 className="text-lg font-bold text-zinc-100">{title}</h2>
+    <div className="fixed inset-0 z-60 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm">
+      {/* En móvil: sheet desde abajo. En desktop: modal centrado */}
+      <div className="bg-zinc-900 border border-zinc-700 rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-md sm:mx-4 max-h-[92vh] flex flex-col">
+
+        {/* Drag handle visible solo en móvil */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 bg-zinc-700 rounded-full" />
+        </div>
+
+        {/* Header */}
+        <div className="flex justify-between items-center px-4 sm:px-5 pt-3 sm:pt-5 pb-3 shrink-0">
+          <h2 className="text-base font-bold text-zinc-100">{title}</h2>
           <button
             onClick={onClose}
             className="p-1.5 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors"
@@ -35,100 +48,96 @@ export default function FormModal({ modalState, onClose, onSubmit }: FormModalPr
           </button>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-4">
+        {/* Form — scrollable por si el teclado lo empuja */}
+        <form onSubmit={onSubmit} className="overflow-y-auto flex-1 px-4 sm:px-5 pb-4 sm:pb-5 space-y-4">
           {type === 'category' ? (
             <div>
-              <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider">
-                Nombre del Ambiente
-              </label>
+              <label className={labelClass}>Nombre del Ambiente</label>
               <input
                 required
                 name="name"
                 defaultValue={getVal('name')}
-                className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none placeholder-zinc-600"
+                className={inputClass}
                 placeholder="Ej: 🪴 Terraza"
+                autoFocus
               />
             </div>
           ) : (
             <>
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider">
+                <label className={labelClass}>
                   Nombre del {type === 'product' ? 'Producto' : 'Artículo'}
                 </label>
                 <input
                   required
                   name="nombre"
                   defaultValue={getVal('nombre')}
-                  className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none placeholder-zinc-600"
+                  className={inputClass}
                   placeholder="Ej: Mesa de centro"
+                  autoFocus
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider">
-                    Precio ($)
-                  </label>
+                  <label className={labelClass}>Precio ($)</label>
                   <input
                     type="number"
                     name="precio"
                     defaultValue={getVal('precio')}
-                    className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none placeholder-zinc-600"
+                    className={inputClass}
                     placeholder="0"
+                    inputMode="numeric"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider">
-                    Tienda
-                  </label>
+                  <label className={labelClass}>Tienda</label>
                   <input
                     name="tienda"
                     defaultValue={getVal('tienda')}
-                    className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none placeholder-zinc-600"
+                    className={inputClass}
                     placeholder="Ej: Sodimac"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider">
-                  Link del Producto
-                </label>
+                <label className={labelClass}>Link del Producto</label>
                 <input
                   type="url"
                   name="link"
                   defaultValue={getVal('link')}
-                  className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none placeholder-zinc-600"
+                  className={inputClass}
                   placeholder="https://..."
+                  inputMode="url"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider">
-                  Link de Imagen
-                </label>
+                <label className={labelClass}>Link de Imagen</label>
                 <input
                   type="url"
                   name="imagen"
                   defaultValue={getVal('imagen')}
-                  className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none placeholder-zinc-600"
+                  className={inputClass}
                   placeholder="https://..."
+                  inputMode="url"
                 />
               </div>
             </>
           )}
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
+          <div className="flex justify-end gap-3 pt-2 border-t border-zinc-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg font-medium transition-colors"
+              className="px-4 py-2.5 text-sm text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg font-medium transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold transition-colors"
+              className="px-5 py-2.5 text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold transition-colors active:scale-95"
             >
               Guardar
             </button>

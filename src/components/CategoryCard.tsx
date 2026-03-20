@@ -51,43 +51,47 @@ export default function CategoryCard({
 
       {/* Header */}
       <div
-        className="p-4 cursor-pointer hover:bg-zinc-800/50 transition-colors"
+        className="p-3 sm:p-4 cursor-pointer hover:bg-zinc-800/50 transition-colors"
         onClick={() => setIsOpen(p => !p)}
       >
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div className="flex items-center gap-3">
-            <button className="text-zinc-500 hover:text-zinc-200 shrink-0">
-              {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        {/* Title row */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <button className="text-zinc-500 hover:text-zinc-200 shrink-0 mt-0.5">
+              {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
-            <div>
-              <h2 className="text-base font-bold text-zinc-100">{category.name}</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">{acquiredCount}/{totalCount} adquiridos</p>
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-bold text-zinc-100 leading-snug">{category.name}</h2>
+              <p className="text-[10px] sm:text-xs text-zinc-500 mt-0.5">{acquiredCount}/{totalCount} adquiridos</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 ml-7 sm:ml-0">
-            <span className="px-2.5 py-1 bg-emerald-950 text-emerald-400 text-xs font-semibold rounded-full border border-emerald-900">
-              ✓ {formatMoney(catTotals.adquiridos)}
-            </span>
-            <span className="px-2.5 py-1 bg-amber-950 text-amber-400 text-xs font-semibold rounded-full border border-amber-900">
-              ⏳ {formatMoney(catTotals.pendientes)}
-            </span>
-            <span className="px-2.5 py-1 bg-zinc-800 text-zinc-300 text-xs font-semibold rounded-full border border-zinc-700">
-              {formatMoney(catTotals.total)}
-            </span>
-            <div className="flex items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
-              <button onClick={onEditCategory} className="p-1.5 text-zinc-600 hover:text-emerald-400 rounded transition-colors">
-                <Edit size={14} />
-              </button>
-              <button onClick={onDeleteCategory} className="p-1.5 text-zinc-600 hover:text-red-400 rounded transition-colors">
-                <Trash2 size={14} />
-              </button>
-            </div>
+          {/* Edit / Delete — siempre visible arriba a la derecha */}
+          <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+            <button onClick={onEditCategory} className="p-1.5 text-zinc-600 hover:text-emerald-400 rounded transition-colors">
+              <Edit size={14} />
+            </button>
+            <button onClick={onDeleteCategory} className="p-1.5 text-zinc-600 hover:text-red-400 rounded transition-colors">
+              <Trash2 size={14} />
+            </button>
           </div>
         </div>
 
+        {/* Badges row */}
+        <div className="flex flex-wrap items-center gap-1.5 mt-2 ml-6">
+          <span className="px-2 py-0.5 bg-emerald-950 text-emerald-400 text-[10px] sm:text-xs font-semibold rounded-full border border-emerald-900 tabular-nums">
+            ✓ {formatMoney(catTotals.adquiridos)}
+          </span>
+          <span className="px-2 py-0.5 bg-amber-950 text-amber-400 text-[10px] sm:text-xs font-semibold rounded-full border border-amber-900 tabular-nums">
+            ⏳ {formatMoney(catTotals.pendientes)}
+          </span>
+          <span className="px-2 py-0.5 bg-zinc-800 text-zinc-300 text-[10px] sm:text-xs font-semibold rounded-full border border-zinc-700 tabular-nums">
+            {formatMoney(catTotals.total)}
+          </span>
+        </div>
+
         {/* Progress bar */}
-        <div className="mt-3 ml-7">
+        <div className="mt-2.5 ml-6">
           <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
             <div
               className="h-full bg-emerald-500 rounded-full transition-all duration-500"
@@ -120,12 +124,12 @@ export default function CategoryCard({
           </ul>
 
           {/* Add Product */}
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             <button
               onClick={onAddProduct}
-              className="w-full py-2.5 border border-dashed border-zinc-700 text-zinc-500 rounded-lg hover:border-emerald-600 hover:text-emerald-400 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+              className="w-full py-2.5 border border-dashed border-zinc-700 text-zinc-500 rounded-lg hover:border-emerald-600 hover:text-emerald-400 transition-colors flex items-center justify-center gap-2 text-xs sm:text-sm font-medium active:scale-95"
             >
-              <Plus size={16} /> Añadir producto
+              <Plus size={15} /> Añadir producto
             </button>
           </div>
         </div>
