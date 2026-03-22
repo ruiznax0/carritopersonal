@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Copy, Check, LogOut, Loader2 } from 'lucide-react';
+import { Plus, Copy, Check, LogOut, Loader2, ChevronLeft, DoorOpen } from 'lucide-react';
 import type { Category, ModalState, DetailsModalState, Alternative, Product } from './types';
 import { generateId } from './utils/helpers';
-import { obtenerListaDeUsuario, suscribirseALista, guardarCategorias } from './lib/firestore';
+import { obtenerListasDeUsuario, suscribirseALista, guardarCategorias, abandonarLista } from './lib/firestore';
 import type { ListaDoc } from './lib/firestore';
 import { useAuth } from './contexts/AuthContext';
 import LoginScreen from './components/LoginScreen';
-import ListSetup from './components/ListSetup';
+import MisListas from './components/MisListas';
 import Header from './components/Header';
 import CategoryCard from './components/CategoryCard';
 import FormModal from './components/FormModal';
@@ -15,15 +15,15 @@ import DetailsModal from './components/DetailsModal';
 export default function App() {
   const { user, loading: authLoading, logout } = useAuth();
 
-  const [lista, setLista] = useState<ListaDoc | null>(null);
-  const [listaLoading, setListaLoading] = useState(false);
+  const [listas, setListas] = useState<ListaDoc[]>([]);
+  const [listaActiva, setListaActiva] = useState<ListaDoc | null>(null);
+  const [loadingListas, setLoadingListas] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [copiado, setCopiado] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // Ref para tener siempre el listaId actualizado dentro de los handlers
-  const listaRef = useRef<ListaDoc | null>(null);
-  useEffect(() => { listaRef.current = lista; }, [lista]);
+  const listaActivaRef = useRef<ListaDoc | null>(null);
+  useEffect(() => { listaActivaRef.current = listaActiva; }, [listaActiva]);
 
   const [modalState, setModalState] = useState<ModalState>({
     isOpen: false,
@@ -38,38 +38,66 @@ export default function App() {
     type: null,
   });
 
-  // Cargar lista y suscribirse a cambios en tiempo real
+  // Cargar todas las listas del usuario
   useEffect(() => {
     if (!user) {
-      setLista(null);
+      setListas([]);
+      setListaActiva(null);
       setCategories([]);
       return;
     }
-
-    setListaLoading(true);
-    let unsub: (() => void) | null = null;
-
-    obtenerListaDeUsuario(user.uid).then(l => {
-      if (!l) {
-        setListaLoading(false);
-        return;
-      }
-      setLista(l);
-
-      unsub = suscribirseALista(l.id, (cats) => {
-        setCategories(cats);
-        setListaLoading(false);
-      });
-    });
-
-    return () => unsub?.();
+    setLoadingListas(true);
+    obtenerListasDeUsuario(user.uid)
+      .then(ls => setListas(ls))
+      .finally(() => setLoadingListas(false));
   }, [user]);
 
-  // Helper: guarda en Firestore usando siempre el listaId más reciente
+  // Suscribirse en tiempo real cuando hay lista activa
+  useEffect(() => {
+    if (!listaActiva) return;
+
+    const unsub = suscribirseALista(listaActiva.id, (cats) => {
+      setCategories(cats);
+    });
+
+    return () => unsub();
+  }, [listaActiva]);
+
   const guardar = (cats: Category[]) => {
-    if (listaRef.current) {
-      guardarCategorias(listaRef.current.id, cats);
+    if (listaActivaRef.current) {
+      guardarCategorias(listaActivaRef.current.id, cats);
     }
+  };
+
+  const handleEntrarLista = (lista: ListaDoc) => {
+    setListaActiva(lista);
+    setCategories(lista.categorias);
+  };
+
+  const handleListaCreada = (lista: ListaDoc) => {
+    setListas(prev => {
+      const existe = prev.find(l => l.id === lista.id);
+      if (existe) return prev;
+      return [...prev, lista];
+    });
+    handleEntrarLista(lista);
+  };
+
+  const handleVolverAListas = () => {
+    setListaActiva(null);
+    setCategories([]);
+    // Recargar listas por si hubo cambios
+    if (user) {
+      obtenerListasDeUsuario(user.uid).then(ls => setListas(ls));
+    }
+  };
+
+  const handleAbandonarLista = async () => {
+    if (!user || !listaActiva) return;
+    if (!confirm(`¿Abandonar la lista "${listaActiva.nombre}"? Podrás volver a unirte con el código.`)) return;
+    await abandonarLista(user.uid, listaActiva.id);
+    setListas(prev => prev.filter(l => l.id !== listaActiva.id));
+    handleVolverAListas();
   };
 
   // --- TOTALS ---
@@ -119,10 +147,9 @@ export default function App() {
     e.target.value = '';
   };
 
-  // --- COPIAR CÓDIGO ---
   const copiarCodigo = async () => {
-    if (!lista) return;
-    await navigator.clipboard.writeText(lista.codigoInvitacion);
+    if (!listaActiva) return;
+    await navigator.clipboard.writeText(listaActiva.codigoInvitacion);
     setCopiado(true);
     setTimeout(() => setCopiado(false), 2000);
   };
@@ -138,8 +165,7 @@ export default function App() {
   const closeModal = () =>
     setModalState({ isOpen: false, type: '', categoryId: null, productId: null, editData: null });
 
-  // --- CRUD HANDLERS — todos guardan en Firestore ---
-
+  // --- CRUD HANDLERS ---
   const handleToggleProduct = (catId: string, prodId: string) => {
     setCategories(prev => {
       const updated = prev.map(cat =>
@@ -193,6 +219,51 @@ export default function App() {
         return updated;
       });
     }
+  };
+
+  // Swap alternativa ↔ principal
+  const handleSwapAlternative = (catId: string, prodId: string, altId: string) => {
+    setCategories(prev => {
+      const updated = prev.map(cat => {
+        if (cat.id !== catId) return cat;
+        return {
+          ...cat,
+          products: cat.products.map(prod => {
+            if (prod.id !== prodId) return prod;
+
+            const alt = prod.alternativas.find(a => a.id === altId);
+            if (!alt) return prod;
+
+            // El producto actual baja a alternativa
+            const anteriorComoAlternativa: Alternative = {
+              id: generateId(),
+              nombre: prod.nombre,
+              tienda: prod.tienda,
+              precio: prod.precio,
+              link: prod.link,
+              imagen: prod.imagen,
+            };
+
+            // La alternativa sube a principal
+            const newProd: Product = {
+              ...prod,
+              nombre: alt.nombre,
+              tienda: alt.tienda,
+              precio: alt.precio,
+              link: alt.link,
+              imagen: alt.imagen,
+              alternativas: [
+                anteriorComoAlternativa,
+                ...prod.alternativas.filter(a => a.id !== altId),
+              ],
+            };
+            return newProd;
+          }),
+        };
+      });
+      guardar(updated);
+      return updated;
+    });
   };
 
   // --- FORM SUBMIT ---
@@ -274,19 +345,19 @@ export default function App() {
 
   if (!user) return <LoginScreen />;
 
-  if (listaLoading) {
+  // Sin lista activa → Mis Listas
+  if (!listaActiva) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-3">
-        <Loader2 size={28} className="text-emerald-500 animate-spin" />
-        <p className="text-zinc-500 text-sm">Cargando tu lista...</p>
-      </div>
+      <MisListas
+        listas={listas}
+        loadingListas={loadingListas}
+        onEntrar={handleEntrarLista}
+        onListaCreada={handleListaCreada}
+      />
     );
   }
 
-  if (!lista) {
-    return <ListSetup onListaLista={(l) => { setLista(l); setCategories(l.categorias); }} />;
-  }
-
+  // Lista activa → Vista de lista
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans pb-24">
 
@@ -301,28 +372,47 @@ export default function App() {
 
       <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".json" />
 
-      {/* Barra de código + logout */}
-      <div className="max-w-5xl mx-auto px-3 sm:px-4 pt-3 flex items-center justify-between gap-3">
-        <button
-          onClick={copiarCodigo}
-          className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs font-medium text-zinc-400 transition-colors active:scale-95"
-        >
-          {copiado
-            ? <Check size={13} className="text-emerald-400" />
-            : <Copy size={13} />
-          }
-          Invitar:&nbsp;
-          <span className="font-mono font-bold text-zinc-100 tracking-widest">
-            {lista.codigoInvitacion}
-          </span>
-        </button>
+      {/* Barra de navegación + acciones */}
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 pt-3 flex items-center justify-between gap-3 flex-wrap">
 
-        <button
-          onClick={logout}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:text-red-400 transition-colors"
-        >
-          <LogOut size={13} /> Salir
-        </button>
+        {/* Izquierda: volver + nombre lista */}
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            onClick={handleVolverAListas}
+            className="flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-200 transition-colors shrink-0"
+          >
+            <ChevronLeft size={15} /> Mis listas
+          </button>
+          <span className="text-zinc-700 text-xs">/</span>
+          <span className="text-xs font-semibold text-zinc-300 truncate">{listaActiva.nombre}</span>
+        </div>
+
+        {/* Derecha: código + abandonar + logout */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={copiarCodigo}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs font-medium text-zinc-400 transition-colors active:scale-95"
+          >
+            {copiado ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+            <span className="font-mono font-bold text-zinc-100 tracking-widest">{listaActiva.codigoInvitacion}</span>
+          </button>
+
+          <button
+            onClick={handleAbandonarLista}
+            className="flex items-center gap-1 p-1.5 text-zinc-600 hover:text-amber-400 transition-colors"
+            title="Abandonar lista"
+          >
+            <DoorOpen size={15} />
+          </button>
+
+          <button
+            onClick={logout}
+            className="flex items-center gap-1 p-1.5 text-zinc-600 hover:text-red-400 transition-colors"
+            title="Cerrar sesión"
+          >
+            <LogOut size={15} />
+          </button>
+        </div>
       </div>
 
       <main className="max-w-5xl mx-auto px-3 sm:px-4 py-4 space-y-4">
@@ -342,6 +432,7 @@ export default function App() {
             onAddAlternative={(prodId) => openModal('alternative', category.id, prodId)}
             onEditAlternative={(prodId, alt) => openModal('alternative', category.id, prodId, alt)}
             onDeleteAlternative={(prodId, altId) => handleDeleteAlternative(category.id, prodId, altId)}
+            onSwapAlternative={(prodId, altId) => handleSwapAlternative(category.id, prodId, altId)}
           />
         ))}
 

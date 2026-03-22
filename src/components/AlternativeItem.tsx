@@ -1,4 +1,4 @@
-import { ExternalLink, Edit, Trash2 } from 'lucide-react';
+import { ExternalLink, Edit, Trash2, ArrowUpCircle } from 'lucide-react';
 import type { Alternative } from '../types';
 import { formatMoney } from '../utils/helpers';
 
@@ -6,9 +6,10 @@ interface AlternativeItemProps {
   alt: Alternative;
   onEdit: () => void;
   onDelete: () => void;
+  onSwap: () => void;
 }
 
-export default function AlternativeItem({ alt, onEdit, onDelete }: AlternativeItemProps) {
+export default function AlternativeItem({ alt, onEdit, onDelete, onSwap }: AlternativeItemProps) {
   return (
     <div className="bg-zinc-800/70 border border-zinc-700/60 rounded-lg p-2.5 flex items-start justify-between gap-2">
       <div className="min-w-0 flex-1">
@@ -27,6 +28,13 @@ export default function AlternativeItem({ alt, onEdit, onDelete }: AlternativeIt
       <div className="flex items-center gap-2 shrink-0">
         <span className="text-xs font-semibold text-zinc-300 tabular-nums">{formatMoney(alt.precio)}</span>
         <div className="flex gap-0.5">
+          <button
+            onClick={onSwap}
+            title="Usar como principal"
+            className="p-1 text-zinc-600 hover:text-emerald-400 transition-colors"
+          >
+            <ArrowUpCircle size={13} />
+          </button>
           <button onClick={onEdit} className="p-1 text-zinc-600 hover:text-emerald-400 transition-colors">
             <Edit size={12} />
           </button>

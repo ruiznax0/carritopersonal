@@ -15,6 +15,7 @@ interface CategoryCardProps {
   onAddAlternative: (prodId: string) => void;
   onEditAlternative: (prodId: string, alt: Alternative) => void;
   onDeleteAlternative: (prodId: string, altId: string) => void;
+  onSwapAlternative: (prodId: string, altId: string) => void;
 }
 
 export default function CategoryCard({
@@ -28,6 +29,7 @@ export default function CategoryCard({
   onAddAlternative,
   onEditAlternative,
   onDeleteAlternative,
+  onSwapAlternative,
 }: CategoryCardProps) {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -54,7 +56,6 @@ export default function CategoryCard({
         className="p-3 sm:p-4 cursor-pointer hover:bg-zinc-800/50 transition-colors"
         onClick={() => setIsOpen(p => !p)}
       >
-        {/* Title row */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <button className="text-zinc-500 hover:text-zinc-200 shrink-0 mt-0.5">
@@ -66,7 +67,6 @@ export default function CategoryCard({
             </div>
           </div>
 
-          {/* Edit / Delete — siempre visible arriba a la derecha */}
           <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
             <button onClick={onEditCategory} className="p-1.5 text-zinc-600 hover:text-emerald-400 rounded transition-colors">
               <Edit size={14} />
@@ -77,7 +77,7 @@ export default function CategoryCard({
           </div>
         </div>
 
-        {/* Badges row */}
+        {/* Badges */}
         <div className="flex flex-wrap items-center gap-1.5 mt-2 ml-6">
           <span className="px-2 py-0.5 bg-emerald-950 text-emerald-400 text-[10px] sm:text-xs font-semibold rounded-full border border-emerald-900 tabular-nums">
             ✓ {formatMoney(catTotals.adquiridos)}
@@ -119,11 +119,11 @@ export default function CategoryCard({
                   if (alt) onEditAlternative(product.id, alt);
                 }}
                 onDeleteAlternative={(altId) => onDeleteAlternative(product.id, altId)}
+                onSwapAlternative={(altId) => onSwapAlternative(product.id, altId)}
               />
             ))}
           </ul>
 
-          {/* Add Product */}
           <div className="p-3 sm:p-4">
             <button
               onClick={onAddProduct}

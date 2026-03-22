@@ -4,11 +4,12 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
-  onSnapshot
+  onSnapshot,
+  arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Category } from '../types';
-
 
 export interface ListaDoc {
   id: string;
@@ -20,11 +21,9 @@ export interface ListaDoc {
   updatedAt: unknown;
 }
 
-// Genera código alfanumérico de 6 caracteres
 const generarCodigo = (): string =>
   Math.random().toString(36).substring(2, 8).toUpperCase();
 
-// Genera un ID único para la lista
 const generarListaId = (): string =>
   Math.random().toString(36).substring(2, 11);
 
@@ -47,81 +46,74 @@ export const crearLista = async (
   };
 
   await setDoc(doc(db, 'listas', listaId), lista);
-
-  // Guardar el código como índice para búsqueda rápida
   await setDoc(doc(db, 'invitaciones', codigo), { listaId });
-
-  // Guardar referencia en el perfil del usuario
-  await setDoc(doc(db, 'usuarios', uid), { listaId }, { merge: true });
+  // Guardar en array de listas del usuario
+  await setDoc(doc(db, 'usuarios', uid), { listaIds: arrayUnion(listaId) }, { merge: true });
 
   return { id: listaId, ...lista };
 };
 
-// Unirse a lista con código
+// Unirse con código
 export const unirseALista = async (
   uid: string,
   codigo: string
 ): Promise<ListaDoc | null> => {
   const codigoUpper = codigo.toUpperCase().trim();
-  const invRef = doc(db, 'invitaciones', codigoUpper);
-  const invSnap = await getDoc(invRef);
-
+  const invSnap = await getDoc(doc(db, 'invitaciones', codigoUpper));
   if (!invSnap.exists()) return null;
 
   const { listaId } = invSnap.data() as { listaId: string };
-  const listaRef = doc(db, 'listas', listaId);
-  const listaSnap = await getDoc(listaRef);
-
+  const listaSnap = await getDoc(doc(db, 'listas', listaId));
   if (!listaSnap.exists()) return null;
 
   const listaData = listaSnap.data() as Omit<ListaDoc, 'id'>;
 
-  // Agregar uid a colaboradores si no está ya
   if (!listaData.colaboradores.includes(uid)) {
-    await updateDoc(listaRef, {
-      colaboradores: [...listaData.colaboradores, uid],
+    await updateDoc(doc(db, 'listas', listaId), {
+      colaboradores: arrayUnion(uid),
     });
   }
 
-  // Guardar referencia en perfil del usuario
-  await setDoc(doc(db, 'usuarios', uid), { listaId }, { merge: true });
+  await setDoc(doc(db, 'usuarios', uid), { listaIds: arrayUnion(listaId) }, { merge: true });
 
   return { id: listaId, ...listaData };
 };
 
-// Obtener la lista del usuario (si ya tiene una asignada)
-export const obtenerListaDeUsuario = async (
-  uid: string
-): Promise<ListaDoc | null> => {
+// Obtener todas las listas del usuario
+export const obtenerListasDeUsuario = async (uid: string): Promise<ListaDoc[]> => {
   const usuarioSnap = await getDoc(doc(db, 'usuarios', uid));
-  if (!usuarioSnap.exists()) return null;
+  if (!usuarioSnap.exists()) return [];
 
-  const { listaId } = usuarioSnap.data() as { listaId?: string };
-  if (!listaId) return null;
+  const data = usuarioSnap.data() as { listaIds?: string[]; listaId?: string };
 
-  const listaSnap = await getDoc(doc(db, 'listas', listaId));
-  if (!listaSnap.exists()) return null;
+  // Compatibilidad con el modelo anterior (listaId singular)
+  const ids = data.listaIds ?? (data.listaId ? [data.listaId] : []);
+  if (ids.length === 0) return [];
 
-  const data = listaSnap.data() as Omit<ListaDoc, 'id'>;
+  const listas = await Promise.all(
+    ids.map(async (id) => {
+      const snap = await getDoc(doc(db, 'listas', id));
+      if (!snap.exists()) return null;
+      return { id, ...snap.data() } as ListaDoc;
+    })
+  );
 
-  // Verificar que el uid sigue siendo colaborador
-  if (!data.colaboradores.includes(uid)) return null;
-
-  return { id: listaId, ...data };
+  return listas.filter(Boolean) as ListaDoc[];
 };
 
-// Guardar categorías actualizadas
-export const guardarCategorias = async (
-  listaId: string,
-  categorias: Category[]
-): Promise<void> => {
+// Abandonar una lista
+export const abandonarLista = async (uid: string, listaId: string): Promise<void> => {
+  // Quitar de las listas del usuario
+  await updateDoc(doc(db, 'usuarios', uid), {
+    listaIds: arrayRemove(listaId),
+  });
+  // Quitar de colaboradores de la lista
   await updateDoc(doc(db, 'listas', listaId), {
-    categorias,
-    updatedAt: serverTimestamp(),
+    colaboradores: arrayRemove(uid),
   });
 };
 
-
+// Suscribirse a cambios en tiempo real
 export const suscribirseALista = (
   listaId: string,
   onUpdate: (categorias: Category[]) => void
@@ -131,5 +123,16 @@ export const suscribirseALista = (
       const data = snap.data() as Omit<ListaDoc, 'id'>;
       onUpdate(data.categorias);
     }
+  });
+};
+
+// Guardar categorías
+export const guardarCategorias = async (
+  listaId: string,
+  categorias: Category[]
+): Promise<void> => {
+  await updateDoc(doc(db, 'listas', listaId), {
+    categorias,
+    updatedAt: serverTimestamp(),
   });
 };

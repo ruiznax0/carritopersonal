@@ -13,6 +13,7 @@ interface ProductItemProps {
   onAddAlternative: () => void;
   onEditAlternative: (altId: string) => void;
   onDeleteAlternative: (altId: string) => void;
+  onSwapAlternative: (altId: string) => void;
 }
 
 export default function ProductItem({
@@ -23,6 +24,7 @@ export default function ProductItem({
   onAddAlternative,
   onEditAlternative,
   onDeleteAlternative,
+  onSwapAlternative,
 }: ProductItemProps) {
   const [altsOpen, setAltsOpen] = useState(false);
   const hasAlternatives = product.alternativas && product.alternativas.length > 0;
@@ -31,8 +33,6 @@ export default function ProductItem({
     <li className={`px-3 sm:px-4 py-3 transition-colors border-b border-zinc-800/80 last:border-b-0 ${
       product.adquirido ? 'bg-emerald-950/20' : 'hover:bg-zinc-800/30'
     }`}>
-
-      {/* Main row */}
       <div className="flex items-start gap-2.5 sm:gap-3">
 
         {/* Checkbox */}
@@ -45,10 +45,8 @@ export default function ProductItem({
           {product.adquirido ? <CheckCircle2 size={20} /> : <Circle size={20} />}
         </button>
 
-        {/* Content */}
         <div className="flex-1 min-w-0">
-
-          {/* Name + price + actions en una fila */}
+          {/* Name + price + actions */}
           <div className="flex items-start justify-between gap-2">
             <h3 className={`text-sm font-semibold leading-snug flex-1 min-w-0 ${
               product.adquirido ? 'text-zinc-500 line-through decoration-zinc-600' : 'text-zinc-100'
@@ -56,7 +54,6 @@ export default function ProductItem({
               {product.nombre}
             </h3>
 
-            {/* Price + actions (columna derecha) */}
             <div className="flex items-center gap-2 shrink-0">
               <span className={`text-sm font-bold tabular-nums ${
                 product.precio === 0 ? 'text-zinc-700' : product.adquirido ? 'text-emerald-500' : 'text-zinc-300'
@@ -64,23 +61,17 @@ export default function ProductItem({
                 {product.precio > 0 ? formatMoney(product.precio) : '—'}
               </span>
               <div className="flex gap-0.5">
-                <button
-                  onClick={onEditProduct}
-                  className="p-1.5 text-zinc-600 hover:text-emerald-400 transition-colors rounded active:scale-90"
-                >
+                <button onClick={onEditProduct} className="p-1.5 text-zinc-600 hover:text-emerald-400 transition-colors rounded active:scale-90">
                   <Edit size={13} />
                 </button>
-                <button
-                  onClick={onDeleteProduct}
-                  className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded active:scale-90"
-                >
+                <button onClick={onDeleteProduct} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded active:scale-90">
                   <Trash2 size={13} />
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Meta: tienda, link, foto */}
+          {/* Meta */}
           {(product.tienda || product.link || product.imagen) && (
             <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1 text-[11px] text-zinc-500">
               {product.tienda && <span>🏬 {product.tienda}</span>}
@@ -127,6 +118,7 @@ export default function ProductItem({
                   alt={alt}
                   onEdit={() => onEditAlternative(alt.id)}
                   onDelete={() => onDeleteAlternative(alt.id)}
+                  onSwap={() => onSwapAlternative(alt.id)}
                 />
               ))}
             </div>
