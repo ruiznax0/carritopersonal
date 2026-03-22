@@ -1,18 +1,38 @@
-import { useState, useEffect, useRef } from 'react';
-import { Plus } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Plus, Copy, Check, LogOut, Loader2 } from 'lucide-react';
 import type { Category, ModalState, DetailsModalState, Alternative, Product } from './types';
-import { INITIAL_DATA } from './data/initialData';
 import { generateId } from './utils/helpers';
+import { guardarCategorias, obtenerListaDeUsuario } from './lib/firestore';
+import type { ListaDoc } from './lib/firestore';
+import { useAuth } from './contexts/AuthContext';
+import LoginScreen from './components/LoginScreen';
+import ListSetup from './components/ListSetup';
 import Header from './components/Header';
 import CategoryCard from './components/CategoryCard';
 import FormModal from './components/FormModal';
 import DetailsModal from './components/DetailsModal';
 
+function useDebouncedCallback<T extends unknown[]>(
+  fn: (...args: T) => void,
+  delay: number
+) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  return useCallback(
+    (...args: T) => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => fn(...args), delay);
+    },
+    [fn, delay]
+  );
+}
+
 export default function App() {
-  const [categories, setCategories] = useState<Category[]>(() => {
-    const saved = localStorage.getItem('listaHogarData');
-    return saved ? JSON.parse(saved) : INITIAL_DATA;
-  });
+  const { user, loading: authLoading, logout } = useAuth();
+
+  const [lista, setLista] = useState<ListaDoc | null>(null);
+  const [listaLoading, setListaLoading] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [copiado, setCopiado] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -30,10 +50,37 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('listaHogarData', JSON.stringify(categories));
-  }, [categories]);
+    if (!user) {
+      setLista(null);
+      setCategories([]);
+      return;
+    }
+    setListaLoading(true);
+    obtenerListaDeUsuario(user.uid)
+      .then(l => {
+        if (l) {
+          setLista(l);
+          setCategories(l.categorias);
+        }
+      })
+      .finally(() => setListaLoading(false));
+  }, [user]);
 
-  // --- TOTALS ---
+  const guardarEnFirestore = useCallback(
+    async (cats: Category[]) => {
+      if (!lista) return;
+      await guardarCategorias(lista.id, cats);
+    },
+    [lista]
+  );
+
+  const debouncedGuardar = useDebouncedCallback(guardarEnFirestore, 500);
+
+  useEffect(() => {
+    if (!lista) return;
+    debouncedGuardar(categories);
+  }, [categories, lista, debouncedGuardar]);
+
   const globalTotals = categories.reduce(
     (acc, cat) => {
       cat.products.forEach(p => {
@@ -47,7 +94,6 @@ export default function App() {
     { adquiridos: 0, pendientes: 0, total: 0 }
   );
 
-  // --- IMPORT / EXPORT ---
   const handleExport = () => {
     const blob = new Blob([JSON.stringify(categories, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -79,7 +125,13 @@ export default function App() {
     e.target.value = '';
   };
 
-  // --- MODAL HELPERS ---
+  const copiarCodigo = async () => {
+    if (!lista) return;
+    await navigator.clipboard.writeText(lista.codigoInvitacion);
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2000);
+  };
+
   const openModal = (
     type: ModalState['type'],
     categoryId: string | null = null,
@@ -90,7 +142,6 @@ export default function App() {
   const closeModal = () =>
     setModalState({ isOpen: false, type: '', categoryId: null, productId: null, editData: null });
 
-  // --- CRUD HANDLERS ---
   const handleToggleProduct = (catId: string, prodId: string) => {
     setCategories(prev =>
       prev.map(cat =>
@@ -136,7 +187,6 @@ export default function App() {
     }
   };
 
-  // --- FORM SUBMIT ---
   const handleModalSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.currentTarget).entries()) as Record<string, string>;
@@ -197,12 +247,35 @@ export default function App() {
         })
       );
     }
-
     closeModal();
   };
 
+  // --- RENDER STATES ---
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <Loader2 size={28} className="text-emerald-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) return <LoginScreen />;
+
+  if (listaLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-3">
+        <Loader2 size={28} className="text-emerald-500 animate-spin" />
+        <p className="text-zinc-500 text-sm">Cargando tu lista...</p>
+      </div>
+    );
+  }
+
+  if (!lista) {
+    return <ListSetup onListaLista={(l) => { setLista(l); setCategories(l.categorias); }} />;
+  }
+
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans pb-20">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans pb-24">
 
       <Header
         totals={globalTotals}
@@ -215,7 +288,31 @@ export default function App() {
 
       <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".json" />
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
+      {/* Barra de código + logout */}
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 pt-3 flex items-center justify-between gap-3">
+        <button
+          onClick={copiarCodigo}
+          className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs font-medium text-zinc-400 transition-colors active:scale-95"
+        >
+          {copiado
+            ? <Check size={13} className="text-emerald-400" />
+            : <Copy size={13} />
+          }
+          Invitar:&nbsp;
+          <span className="font-mono font-bold text-zinc-100 tracking-widest">
+            {lista.codigoInvitacion}
+          </span>
+        </button>
+
+        <button
+          onClick={logout}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:text-red-400 transition-colors"
+        >
+          <LogOut size={13} /> Salir
+        </button>
+      </div>
+
+      <main className="max-w-5xl mx-auto px-3 sm:px-4 py-4 space-y-4">
         {categories.map(category => (
           <CategoryCard
             key={category.id}
@@ -237,18 +334,13 @@ export default function App() {
 
         <button
           onClick={() => openModal('category')}
-          className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 rounded-xl border border-dashed border-zinc-700 hover:border-emerald-600 transition-all flex items-center justify-center gap-2 text-sm font-semibold"
+          className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 rounded-xl border border-dashed border-zinc-700 hover:border-emerald-600 transition-all flex items-center justify-center gap-2 text-sm font-semibold active:scale-95"
         >
           <Plus size={18} /> Agregar Nuevo Ambiente
         </button>
       </main>
 
-      <FormModal
-        modalState={modalState}
-        onClose={closeModal}
-        onSubmit={handleModalSubmit}
-      />
-
+      <FormModal modalState={modalState} onClose={closeModal} onSubmit={handleModalSubmit} />
       <DetailsModal
         isOpen={detailsModal.isOpen}
         type={detailsModal.type}
