@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import {
   onAuthStateChanged,
   signInWithRedirect,
-  getRedirectResult,
   signOut,
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
@@ -22,26 +21,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let unsub: (() => void) | null = null;
-
-    const init = async () => {
-      try {
-        await getRedirectResult(auth);
-      } catch {
-        // ignorar errores del redirect
-      }
-
-      unsub = onAuthStateChanged(auth, (u) => {
-        setUser(u);
-        setLoading(false);
-      });
-    };
-
-    init();
-
-    return () => {
-      unsub?.();
-    };
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setLoading(false);
+    });
+    return unsub;
   }, []);
 
   const loginConGoogle = async () => {
