@@ -22,20 +22,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Primero procesamos el resultado del redirect si viene de Google
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) setUser(result.user);
-      })
-      .catch(() => {})
-      .finally(() => {
-        // Solo después escuchamos el estado de auth
-        const unsub = onAuthStateChanged(auth, (u) => {
-          setUser(u);
-          setLoading(false);
-        });
-        return unsub;
+    let unsub: (() => void) | null = null;
+
+    const init = async () => {
+      try {
+        await getRedirectResult(auth);
+      } catch {
+        // ignorar errores del redirect
+      }
+
+      unsub = onAuthStateChanged(auth, (u) => {
+        setUser(u);
+        setLoading(false);
       });
+    };
+
+    init();
+
+    return () => {
+      unsub?.();
+    };
   }, []);
 
   const loginConGoogle = async () => {
