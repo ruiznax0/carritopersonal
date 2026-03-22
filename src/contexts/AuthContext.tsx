@@ -1,5 +1,10 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from 'firebase/auth';
+import {
+  onAuthStateChanged,
+  signInWithRedirect,
+  getRedirectResult,
+  signOut,
+} from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 
@@ -17,25 +22,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Captura el resultado si volvió de un redirect
-    getRedirectResult(auth).catch(() => { });
-
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-    });
-    return unsub;
+    // Primero procesamos el resultado del redirect si viene de Google
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) setUser(result.user);
+      })
+      .catch(() => {})
+      .finally(() => {
+        // Solo después escuchamos el estado de auth
+        const unsub = onAuthStateChanged(auth, (u) => {
+          setUser(u);
+          setLoading(false);
+        });
+        return unsub;
+      });
   }, []);
 
   const loginConGoogle = async () => {
-    // En móvil usa redirect, en desktop popup
-    const esMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
-    if (esMobile) {
-      await signInWithRedirect(auth, googleProvider);
-    } else {
-      await signInWithPopup(auth, googleProvider);
-    }
+    await signInWithRedirect(auth, googleProvider);
   };
+
   const logout = async () => {
     await signOut(auth);
   };
