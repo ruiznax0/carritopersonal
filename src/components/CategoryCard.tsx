@@ -129,7 +129,7 @@ export default function CategoryCard({
               onClick={onAddProduct}
               className="w-full py-2.5 border border-dashed border-zinc-700 text-zinc-500 rounded-lg hover:border-emerald-600 hover:text-emerald-400 transition-colors flex items-center justify-center gap-2 text-xs sm:text-sm font-medium active:scale-95"
             >
-              <Plus size={15} /> Añadir producto
+              <Plus size={15} /> Nuevo ítem
             </button>
           </div>
         </div>

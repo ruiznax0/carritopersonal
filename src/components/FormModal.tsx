@@ -13,8 +13,8 @@ export default function FormModal({ modalState, onClose, onSubmit }: FormModalPr
   const { type, editData } = modalState;
   const isEdit = !!editData;
 
-  const title = `${isEdit ? 'Editar' : 'Añadir'} ${
-    type === 'category' ? 'Ambiente' : type === 'product' ? 'Producto' : 'Alternativa'
+  const title = `${isEdit ? 'Editar' : 'Nueva'} ${
+    type === 'category' ? 'Categoría' : type === 'product' ? 'Producto' : 'Alternativa'
   }`;
 
   const getVal = (field: string): string => {
@@ -28,7 +28,7 @@ export default function FormModal({ modalState, onClose, onSubmit }: FormModalPr
   const labelClass = 'block text-[11px] font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider';
 
   return (
-    <div className="fixed inset-0 z-60 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm">
       {/* En móvil: sheet desde abajo. En desktop: modal centrado */}
       <div className="bg-zinc-900 border border-zinc-700 rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-md sm:mx-4 max-h-[92vh] flex flex-col">
 
@@ -52,13 +52,13 @@ export default function FormModal({ modalState, onClose, onSubmit }: FormModalPr
         <form onSubmit={onSubmit} className="overflow-y-auto flex-1 px-4 sm:px-5 pb-4 sm:pb-5 space-y-4">
           {type === 'category' ? (
             <div>
-              <label className={labelClass}>Nombre del Ambiente</label>
+              <label className={labelClass}>Nombre de la Categoría</label>
               <input
                 required
                 name="name"
                 defaultValue={getVal('name')}
                 className={inputClass}
-                placeholder="Ej: 🪴 Terraza"
+                placeholder="Ej: 🪴 Terraza, 🛋️ Living..."
                 autoFocus
               />
             </div>

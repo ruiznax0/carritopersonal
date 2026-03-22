@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Plus, Hash, Loader2, LogIn, ArrowRight, LogOut, Users } from 'lucide-react';
+import { Plus, Hash, Loader2, LogIn, ArrowRight, LogOut, Users, ChevronDown, ChevronUp } from 'lucide-react';
 import { crearLista, unirseALista } from '../lib/firestore';
 import type { ListaDoc } from '../lib/firestore';
-import { INITIAL_DATA } from '../data/initialData';
+import type { Category } from '../types';
+import { generateId } from '../utils/helpers';
 import { useAuth } from '../contexts/AuthContext';
 
 interface MisListasProps {
@@ -15,16 +16,27 @@ interface MisListasProps {
 export default function MisListas({ listas, loadingListas, onEntrar, onListaCreada }: MisListasProps) {
   const { user, logout } = useAuth();
   const [panel, setPanel] = useState<'none' | 'crear' | 'unirse'>('none');
+
+  // Formulario crear
+  const [nombreLista, setNombreLista] = useState('');
+  const [nombreCategoria, setNombreCategoria] = useState('');
+
+  // Formulario unirse
   const [codigo, setCodigo] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleCrear = async () => {
-    if (!user) return;
+    if (!user || !nombreLista.trim()) return;
     setLoading(true);
     setError('');
     try {
-      const lista = await crearLista(user.uid, 'Lista Hogar', INITIAL_DATA);
+      const categorias: Category[] = nombreCategoria.trim()
+        ? [{ id: generateId(), name: nombreCategoria.trim(), products: [] }]
+        : [];
+
+      const lista = await crearLista(user.uid, nombreLista.trim(), categorias);
       onListaCreada(lista);
     } catch {
       setError('Error al crear la lista. Intenta de nuevo.');
@@ -51,6 +63,14 @@ export default function MisListas({ listas, loadingListas, onEntrar, onListaCrea
     }
   };
 
+  const togglePanel = (p: 'crear' | 'unirse') => {
+    setPanel(prev => prev === p ? 'none' : p);
+    setError('');
+  };
+
+  const inputClass = 'w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none placeholder-zinc-600';
+  const labelClass = 'block text-[11px] font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider';
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 pb-20">
 
@@ -59,7 +79,7 @@ export default function MisListas({ listas, loadingListas, onEntrar, onListaCrea
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-base font-bold text-zinc-100">Mis Listas</h1>
-            <p className="text-xs text-zinc-500 mt-0.5 truncate max-w-[200px]">{user?.email}</p>
+            <p className="text-xs text-zinc-500 mt-0.5 truncate max-w-[220px]">{user?.email}</p>
           </div>
           <button
             onClick={logout}
@@ -78,8 +98,8 @@ export default function MisListas({ listas, loadingListas, onEntrar, onListaCrea
             <Loader2 size={24} className="text-emerald-500 animate-spin" />
           </div>
         ) : listas.length === 0 ? (
-          <div className="text-center py-12 text-zinc-600 text-sm">
-            No tienes listas aún. Crea una o únete con un código.
+          <div className="text-center py-10 text-zinc-600 text-sm">
+            No tienes listas aún.<br />Crea una o únete con un código.
           </div>
         ) : (
           <div className="space-y-3">
@@ -100,8 +120,7 @@ export default function MisListas({ listas, loadingListas, onEntrar, onListaCrea
                         <span>{adquiridos}/{totalProductos} items</span>
                         <span className="font-mono tracking-wider text-zinc-600">#{lista.codigoInvitacion}</span>
                       </div>
-                      {/* Progress */}
-                      <div className="mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden w-full">
+                      <div className="mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-emerald-500 rounded-full transition-all duration-500"
                           style={{ width: totalProductos > 0 ? `${Math.round((adquiridos / totalProductos) * 100)}%` : '0%' }}
@@ -122,48 +141,71 @@ export default function MisListas({ listas, loadingListas, onEntrar, onListaCrea
         )}
 
         {/* Acciones */}
-        <div className="pt-2 space-y-2">
+        <div className="space-y-2 pt-2">
 
           {/* Crear */}
           <button
-            onClick={() => { setPanel(panel === 'crear' ? 'none' : 'crear'); setError(''); }}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-zinc-900 hover:bg-zinc-800 border border-dashed border-zinc-700 hover:border-emerald-600 text-zinc-400 hover:text-zinc-100 rounded-xl text-sm font-semibold transition-all"
+            onClick={() => togglePanel('crear')}
+            className="w-full flex items-center justify-between px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-dashed border-zinc-700 hover:border-emerald-600 text-zinc-400 hover:text-zinc-100 rounded-xl text-sm font-semibold transition-all"
           >
-            <Plus size={16} /> Nueva lista
+            <span className="flex items-center gap-2"><Plus size={16} /> Nueva lista</span>
+            {panel === 'crear' ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
           </button>
 
           {panel === 'crear' && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-              <p className="text-xs text-zinc-400">Se creará una lista nueva con items de ejemplo.</p>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-4">
+              <div>
+                <label className={labelClass}>Nombre de la lista *</label>
+                <input
+                  value={nombreLista}
+                  onChange={e => setNombreLista(e.target.value)}
+                  className={inputClass}
+                  placeholder="Ej: Lista Hogar, Depto Santiago..."
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Primera categoría <span className="normal-case text-zinc-600 font-normal">(opcional)</span></label>
+                <input
+                  value={nombreCategoria}
+                  onChange={e => setNombreCategoria(e.target.value)}
+                  className={inputClass}
+                  placeholder="Ej: 🛋️ Living, 🍳 Cocina..."
+                />
+              </div>
               <button
                 onClick={handleCrear}
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors active:scale-95"
+                disabled={loading || !nombreLista.trim()}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-lg text-sm font-semibold transition-colors active:scale-95"
               >
-                {loading ? <><Loader2 size={15} className="animate-spin" /> Creando...</> : 'Confirmar'}
+                {loading ? <><Loader2 size={15} className="animate-spin" /> Creando...</> : 'Crear lista'}
               </button>
             </div>
           )}
 
           {/* Unirse */}
           <button
-            onClick={() => { setPanel(panel === 'unirse' ? 'none' : 'unirse'); setError(''); }}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-zinc-100 rounded-xl text-sm font-semibold transition-all"
+            onClick={() => togglePanel('unirse')}
+            className="w-full flex items-center justify-between px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-zinc-100 rounded-xl text-sm font-semibold transition-all"
           >
-            <LogIn size={16} /> Unirse con código
+            <span className="flex items-center gap-2"><LogIn size={16} /> Unirse con código</span>
+            {panel === 'unirse' ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
           </button>
 
           {panel === 'unirse' && (
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-              <div className="relative">
-                <Hash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-                <input
-                  value={codigo}
-                  onChange={e => setCodigo(e.target.value.toUpperCase())}
-                  maxLength={6}
-                  placeholder="ABC123"
-                  className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg pl-8 pr-3 py-2.5 text-sm font-mono tracking-widest uppercase focus:ring-2 focus:ring-emerald-500 outline-none placeholder-zinc-600"
-                />
+              <div>
+                <label className={labelClass}>Código de invitación</label>
+                <div className="relative">
+                  <Hash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    value={codigo}
+                    onChange={e => setCodigo(e.target.value.toUpperCase())}
+                    maxLength={6}
+                    placeholder="ABC123"
+                    className={`${inputClass} pl-8 font-mono tracking-widest uppercase`}
+                  />
+                </div>
               </div>
               <button
                 onClick={handleUnirse}

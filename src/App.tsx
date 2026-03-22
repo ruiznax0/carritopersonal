@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Plus, Copy, Check, LogOut, Loader2, ChevronLeft, DoorOpen } from 'lucide-react';
 import type { Category, ModalState, DetailsModalState, Alternative, Product } from './types';
 import { generateId } from './utils/helpers';
-import { obtenerListasDeUsuario, suscribirseALista, guardarCategorias, abandonarLista } from './lib/firestore';
+import { obtenerListasDeUsuario, suscribirseALista, guardarCategorias, abandonarLista, renombrarLista } from './lib/firestore';
 import type { ListaDoc } from './lib/firestore';
 import { useAuth } from './contexts/AuthContext';
 import LoginScreen from './components/LoginScreen';
@@ -25,6 +25,10 @@ export default function App() {
   const listaActivaRef = useRef<ListaDoc | null>(null);
   useEffect(() => { listaActivaRef.current = listaActiva; }, [listaActiva]);
 
+  // Estado
+  const [editandoNombre, setEditandoNombre] = useState(false);
+  const [nuevoNombre, setNuevoNombre] = useState('');
+
   const [modalState, setModalState] = useState<ModalState>({
     isOpen: false,
     type: '',
@@ -37,6 +41,8 @@ export default function App() {
     isOpen: false,
     type: null,
   });
+
+
 
   // Cargar todas las listas del usuario
   useEffect(() => {
@@ -67,6 +73,14 @@ export default function App() {
     if (listaActivaRef.current) {
       guardarCategorias(listaActivaRef.current.id, cats);
     }
+  };
+
+  // Handler
+  const handleRenombrar = async () => {
+    if (!listaActiva || !nuevoNombre.trim()) return;
+    await renombrarLista(listaActiva.id, nuevoNombre.trim());
+    setListaActiva(prev => prev ? { ...prev, nombre: nuevoNombre.trim() } : prev);
+    setEditandoNombre(false);
   };
 
   const handleEntrarLista = (lista: ListaDoc) => {
@@ -207,13 +221,13 @@ export default function App() {
           cat.id !== catId
             ? cat
             : {
-                ...cat,
-                products: cat.products.map(prod =>
-                  prod.id !== prodId
-                    ? prod
-                    : { ...prod, alternativas: prod.alternativas.filter(a => a.id !== altId) }
-                ),
-              }
+              ...cat,
+              products: cat.products.map(prod =>
+                prod.id !== prodId
+                  ? prod
+                  : { ...prod, alternativas: prod.alternativas.filter(a => a.id !== altId) }
+              ),
+            }
         );
         guardar(updated);
         return updated;
@@ -363,6 +377,7 @@ export default function App() {
 
       <Header
         totals={globalTotals}
+        nombreLista={listaActiva.nombre}
         onExport={handleExport}
         onImportClick={() => fileInputRef.current?.click()}
         onShowAdquiridos={() => setDetailsModal({ isOpen: true, type: 'adquiridos' })}
@@ -384,8 +399,23 @@ export default function App() {
             <ChevronLeft size={15} /> Mis listas
           </button>
           <span className="text-zinc-700 text-xs">/</span>
-          <span className="text-xs font-semibold text-zinc-300 truncate">{listaActiva.nombre}</span>
-        </div>
+          {editandoNombre ? (
+            <input
+              autoFocus
+              value={nuevoNombre}
+              onChange={e => setNuevoNombre(e.target.value)}
+              onBlur={handleRenombrar}
+              onKeyDown={e => e.key === 'Enter' && handleRenombrar()}
+              className="bg-zinc-800 border border-emerald-500 text-zinc-100 text-xs font-semibold rounded px-2 py-0.5 outline-none w-36"
+            />
+          ) : (
+            <button
+              onClick={() => { setNuevoNombre(listaActiva.nombre); setEditandoNombre(true); }}
+              className="text-xs font-semibold text-zinc-300 hover:text-zinc-100 truncate transition-colors"
+            >
+              {listaActiva.nombre}
+            </button>
+          )}        </div>
 
         {/* Derecha: código + abandonar + logout */}
         <div className="flex items-center gap-2 shrink-0">
@@ -440,7 +470,7 @@ export default function App() {
           onClick={() => openModal('category')}
           className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 rounded-xl border border-dashed border-zinc-700 hover:border-emerald-600 transition-all flex items-center justify-center gap-2 text-sm font-semibold active:scale-95"
         >
-          <Plus size={18} /> Agregar Nuevo Ambiente
+          <Plus size={18} /> Nueva Categoría
         </button>
       </main>
 

@@ -136,3 +136,7 @@ export const guardarCategorias = async (
     updatedAt: serverTimestamp(),
   });
 };
+
+export const renombrarLista = async (listaId: string, nombre: string): Promise<void> => {
+  await updateDoc(doc(db, 'listas', listaId), { nombre });
+};

@@ -3,6 +3,7 @@ import type { Totals } from '../types';
 import { formatMoney } from '../utils/helpers';
 
 interface HeaderProps {
+  nombreLista: string;
   totals: Totals;
   onExport: () => void;
   onImportClick: () => void;
@@ -18,6 +19,7 @@ export default function Header({
   onShowAdquiridos,
   onShowPendientes,
   onShowTotal,
+  nombreLista,
 }: HeaderProps) {
   return (
     <header className="bg-zinc-900/90 backdrop-blur-sm border-b border-zinc-800 sticky top-0 z-10">
@@ -30,8 +32,7 @@ export default function Header({
               <Home size={16} className="text-zinc-900" />
             </div>
             <div>
-              <h1 className="text-base sm:text-lg font-bold text-zinc-100 leading-none">Lista Hogar</h1>
-              <p className="text-[10px] sm:text-xs text-zinc-500 mt-0.5 hidden sm:block">Seguimiento de compras</p>
+              <h1 className="text-base sm:text-lg font-bold text-zinc-100 leading-none">{nombreLista}</h1>
             </div>
           </div>
 
