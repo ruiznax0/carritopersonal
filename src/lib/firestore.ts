@@ -4,9 +4,11 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Category } from '../types';
+
 
 export interface ListaDoc {
   id: string;
@@ -116,5 +118,18 @@ export const guardarCategorias = async (
   await updateDoc(doc(db, 'listas', listaId), {
     categorias,
     updatedAt: serverTimestamp(),
+  });
+};
+
+
+export const suscribirseALista = (
+  listaId: string,
+  onUpdate: (categorias: Category[]) => void
+): (() => void) => {
+  return onSnapshot(doc(db, 'listas', listaId), (snap) => {
+    if (snap.exists()) {
+      const data = snap.data() as Omit<ListaDoc, 'id'>;
+      onUpdate(data.categorias);
+    }
   });
 };

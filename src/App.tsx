@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, Copy, Check, LogOut, Loader2 } from 'lucide-react';
 import type { Category, ModalState, DetailsModalState, Alternative, Product } from './types';
 import { generateId } from './utils/helpers';
-import { guardarCategorias, obtenerListaDeUsuario } from './lib/firestore';
+import { obtenerListaDeUsuario, suscribirseALista, guardarCategorias } from './lib/firestore';
 import type { ListaDoc } from './lib/firestore';
 import { useAuth } from './contexts/AuthContext';
 import LoginScreen from './components/LoginScreen';
@@ -11,20 +11,6 @@ import Header from './components/Header';
 import CategoryCard from './components/CategoryCard';
 import FormModal from './components/FormModal';
 import DetailsModal from './components/DetailsModal';
-
-function useDebouncedCallback<T extends unknown[]>(
-  fn: (...args: T) => void,
-  delay: number
-) {
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  return useCallback(
-    (...args: T) => {
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => fn(...args), delay);
-    },
-    [fn, delay]
-  );
-}
 
 export default function App() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -35,6 +21,9 @@ export default function App() {
   const [copiado, setCopiado] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Ref para tener siempre el listaId actualizado dentro de los handlers
+  const listaRef = useRef<ListaDoc | null>(null);
+  useEffect(() => { listaRef.current = lista; }, [lista]);
 
   const [modalState, setModalState] = useState<ModalState>({
     isOpen: false,
@@ -49,38 +38,41 @@ export default function App() {
     type: null,
   });
 
+  // Cargar lista y suscribirse a cambios en tiempo real
   useEffect(() => {
     if (!user) {
       setLista(null);
       setCategories([]);
       return;
     }
+
     setListaLoading(true);
-    obtenerListaDeUsuario(user.uid)
-      .then(l => {
-        if (l) {
-          setLista(l);
-          setCategories(l.categorias);
-        }
-      })
-      .finally(() => setListaLoading(false));
+    let unsub: (() => void) | null = null;
+
+    obtenerListaDeUsuario(user.uid).then(l => {
+      if (!l) {
+        setListaLoading(false);
+        return;
+      }
+      setLista(l);
+
+      unsub = suscribirseALista(l.id, (cats) => {
+        setCategories(cats);
+        setListaLoading(false);
+      });
+    });
+
+    return () => unsub?.();
   }, [user]);
 
-  const guardarEnFirestore = useCallback(
-    async (cats: Category[]) => {
-      if (!lista) return;
-      await guardarCategorias(lista.id, cats);
-    },
-    [lista]
-  );
+  // Helper: guarda en Firestore usando siempre el listaId más reciente
+  const guardar = (cats: Category[]) => {
+    if (listaRef.current) {
+      guardarCategorias(listaRef.current.id, cats);
+    }
+  };
 
-  const debouncedGuardar = useDebouncedCallback(guardarEnFirestore, 500);
-
-  useEffect(() => {
-    if (!lista) return;
-    debouncedGuardar(categories);
-  }, [categories, lista, debouncedGuardar]);
-
+  // --- TOTALS ---
   const globalTotals = categories.reduce(
     (acc, cat) => {
       cat.products.forEach(p => {
@@ -94,6 +86,7 @@ export default function App() {
     { adquiridos: 0, pendientes: 0, total: 0 }
   );
 
+  // --- IMPORT / EXPORT ---
   const handleExport = () => {
     const blob = new Blob([JSON.stringify(categories, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -113,6 +106,7 @@ export default function App() {
         const parsed = JSON.parse(event.target?.result as string);
         if (Array.isArray(parsed)) {
           setCategories(parsed);
+          guardar(parsed);
           alert('¡Lista importada con éxito!');
         } else {
           alert('El formato del archivo no es válido.');
@@ -125,6 +119,7 @@ export default function App() {
     e.target.value = '';
   };
 
+  // --- COPIAR CÓDIGO ---
   const copiarCodigo = async () => {
     if (!lista) return;
     await navigator.clipboard.writeText(lista.codigoInvitacion);
@@ -132,6 +127,7 @@ export default function App() {
     setTimeout(() => setCopiado(false), 2000);
   };
 
+  // --- MODAL HELPERS ---
   const openModal = (
     type: ModalState['type'],
     categoryId: string | null = null,
@@ -142,36 +138,46 @@ export default function App() {
   const closeModal = () =>
     setModalState({ isOpen: false, type: '', categoryId: null, productId: null, editData: null });
 
+  // --- CRUD HANDLERS — todos guardan en Firestore ---
+
   const handleToggleProduct = (catId: string, prodId: string) => {
-    setCategories(prev =>
-      prev.map(cat =>
+    setCategories(prev => {
+      const updated = prev.map(cat =>
         cat.id !== catId
           ? cat
           : { ...cat, products: cat.products.map(p => p.id === prodId ? { ...p, adquirido: !p.adquirido } : p) }
-      )
-    );
+      );
+      guardar(updated);
+      return updated;
+    });
   };
 
   const handleDeleteCategory = (catId: string) => {
     if (confirm('¿Eliminar este ambiente y todos sus productos?')) {
-      setCategories(prev => prev.filter(c => c.id !== catId));
+      setCategories(prev => {
+        const updated = prev.filter(c => c.id !== catId);
+        guardar(updated);
+        return updated;
+      });
     }
   };
 
   const handleDeleteProduct = (catId: string, prodId: string) => {
     if (confirm('¿Eliminar este producto?')) {
-      setCategories(prev =>
-        prev.map(cat =>
+      setCategories(prev => {
+        const updated = prev.map(cat =>
           cat.id !== catId ? cat : { ...cat, products: cat.products.filter(p => p.id !== prodId) }
-        )
-      );
+        );
+        guardar(updated);
+        return updated;
+      });
     }
   };
 
   const handleDeleteAlternative = (catId: string, prodId: string, altId: string) => {
     if (confirm('¿Eliminar esta alternativa?')) {
-      setCategories(prev =>
-        prev.map(cat =>
+      setCategories(prev => {
+        const updated = prev.map(cat =>
           cat.id !== catId
             ? cat
             : {
@@ -182,35 +188,40 @@ export default function App() {
                     : { ...prod, alternativas: prod.alternativas.filter(a => a.id !== altId) }
                 ),
               }
-        )
-      );
+        );
+        guardar(updated);
+        return updated;
+      });
     }
   };
 
+  // --- FORM SUBMIT ---
   const handleModalSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.currentTarget).entries()) as Record<string, string>;
     const { type, categoryId, productId, editData } = modalState;
 
-    if (type === 'category') {
-      if (editData) {
-        setCategories(prev => prev.map(c => c.id === (editData as Category).id ? { ...c, name: data.name } : c));
-      } else {
-        setCategories(prev => [...prev, { id: generateId(), name: data.name, products: [] }]);
-      }
-    } else if (type === 'product') {
-      const productObj: Product = {
-        id: editData ? (editData as Product).id : generateId(),
-        adquirido: editData ? (editData as Product).adquirido : false,
-        nombre: data.nombre,
-        tienda: data.tienda ?? '',
-        precio: Number(data.precio) || 0,
-        link: data.link ?? '',
-        imagen: data.imagen ?? '',
-        alternativas: editData ? (editData as Product).alternativas : [],
-      };
-      setCategories(prev =>
-        prev.map(cat => {
+    setCategories(prev => {
+      let updated = prev;
+
+      if (type === 'category') {
+        if (editData) {
+          updated = prev.map(c => c.id === (editData as Category).id ? { ...c, name: data.name } : c);
+        } else {
+          updated = [...prev, { id: generateId(), name: data.name, products: [] }];
+        }
+      } else if (type === 'product') {
+        const productObj: Product = {
+          id: editData ? (editData as Product).id : generateId(),
+          adquirido: editData ? (editData as Product).adquirido : false,
+          nombre: data.nombre,
+          tienda: data.tienda ?? '',
+          precio: Number(data.precio) || 0,
+          link: data.link ?? '',
+          imagen: data.imagen ?? '',
+          alternativas: editData ? (editData as Product).alternativas : [],
+        };
+        updated = prev.map(cat => {
           if (cat.id !== categoryId) return cat;
           return {
             ...cat,
@@ -218,19 +229,17 @@ export default function App() {
               ? cat.products.map(p => p.id === productObj.id ? productObj : p)
               : [...cat.products, productObj],
           };
-        })
-      );
-    } else if (type === 'alternative') {
-      const altObj: Alternative = {
-        id: editData ? (editData as Alternative).id : generateId(),
-        nombre: data.nombre,
-        tienda: data.tienda ?? '',
-        precio: Number(data.precio) || 0,
-        link: data.link ?? '',
-        imagen: data.imagen ?? '',
-      };
-      setCategories(prev =>
-        prev.map(cat => {
+        });
+      } else if (type === 'alternative') {
+        const altObj: Alternative = {
+          id: editData ? (editData as Alternative).id : generateId(),
+          nombre: data.nombre,
+          tienda: data.tienda ?? '',
+          precio: Number(data.precio) || 0,
+          link: data.link ?? '',
+          imagen: data.imagen ?? '',
+        };
+        updated = prev.map(cat => {
           if (cat.id !== categoryId) return cat;
           return {
             ...cat,
@@ -244,9 +253,13 @@ export default function App() {
               };
             }),
           };
-        })
-      );
-    }
+        });
+      }
+
+      guardar(updated);
+      return updated;
+    });
+
     closeModal();
   };
 
