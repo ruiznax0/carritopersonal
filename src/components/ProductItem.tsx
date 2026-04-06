@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Plus, Trash2, Edit, ExternalLink, Image as ImageIcon, CheckCircle2, Circle } from 'lucide-react';
-import type { Product } from '../types';
+import type { Product, MedioDePago } from '../types';
 import { formatMoney } from '../utils/helpers';
 import AlternativeItem from './AlternativeItem';
 
 interface ProductItemProps {
   product: Product;
   categoryId: string;
+  mediosDePago: MedioDePago[];
   onToggleAcquired: () => void;
   onEditProduct: () => void;
   onDeleteProduct: () => void;
@@ -18,6 +19,7 @@ interface ProductItemProps {
 
 export default function ProductItem({
   product,
+  mediosDePago,
   onToggleAcquired,
   onEditProduct,
   onDeleteProduct,
@@ -28,6 +30,10 @@ export default function ProductItem({
 }: ProductItemProps) {
   const [altsOpen, setAltsOpen] = useState(false);
   const hasAlternatives = product.alternativas && product.alternativas.length > 0;
+
+  const medio = product.medioDePagoId
+    ? mediosDePago.find(m => m.id === product.medioDePagoId)
+    : null;
 
   return (
     <li className={`px-3 sm:px-4 py-3 transition-colors border-b border-zinc-800/80 last:border-b-0 ${
@@ -71,24 +77,30 @@ export default function ProductItem({
             </div>
           </div>
 
-          {/* Meta */}
-          {(product.tienda || product.link || product.imagen) && (
-            <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1 text-[11px] text-zinc-500">
-              {product.tienda && <span>🏬 {product.tienda}</span>}
-              {product.link && (
-                <a href={product.link} target="_blank" rel="noreferrer"
-                  className="flex items-center gap-0.5 text-emerald-500 hover:text-emerald-400">
-                  <ExternalLink size={11} /> Link
-                </a>
-              )}
-              {product.imagen && (
-                <a href={product.imagen} target="_blank" rel="noreferrer"
-                  className="flex items-center gap-0.5 text-violet-400 hover:text-violet-300">
-                  <ImageIcon size={11} /> Foto
-                </a>
-              )}
-            </div>
-          )}
+          {/* Meta: tienda, medio de pago, links */}
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1 text-[11px] text-zinc-500">
+            {product.tienda && <span>🏬 {product.tienda}</span>}
+
+            {/* Badge medio de pago */}
+            {medio && (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white ${medio.color}`}>
+                {medio.nombre}
+              </span>
+            )}
+
+            {product.link && (
+              <a href={product.link} target="_blank" rel="noreferrer"
+                className="flex items-center gap-0.5 text-emerald-500 hover:text-emerald-400">
+                <ExternalLink size={11} /> Link
+              </a>
+            )}
+            {product.imagen && (
+              <a href={product.imagen} target="_blank" rel="noreferrer"
+                className="flex items-center gap-0.5 text-violet-400 hover:text-violet-300">
+                <ImageIcon size={11} /> Foto
+              </a>
+            )}
+          </div>
 
           {/* Alternatives toggle */}
           <div className="flex items-center gap-2 mt-2">

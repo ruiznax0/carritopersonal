@@ -1,8 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Copy, Check, LogOut, Loader2, ChevronLeft, DoorOpen } from 'lucide-react';
-import type { Category, ModalState, DetailsModalState, Alternative, Product } from './types';
+import { Plus, Copy, Check, LogOut, Loader2, ChevronLeft, DoorOpen, CreditCard, Edit2 } from 'lucide-react';
+import type { Category, ModalState, DetailsModalState, Alternative, Product, MedioDePago } from './types';
 import { generateId } from './utils/helpers';
-import { obtenerListasDeUsuario, suscribirseALista, guardarCategorias, abandonarLista, renombrarLista } from './lib/firestore';
+import {
+  obtenerListasDeUsuario,
+  suscribirseALista,
+  guardarCategorias,
+  abandonarLista,
+  renombrarLista,
+  guardarMediosDePago,
+} from './lib/firestore';
 import type { ListaDoc } from './lib/firestore';
 import { useAuth } from './contexts/AuthContext';
 import LoginScreen from './components/LoginScreen';
@@ -11,6 +18,7 @@ import Header from './components/Header';
 import CategoryCard from './components/CategoryCard';
 import FormModal from './components/FormModal';
 import DetailsModal from './components/DetailsModal';
+import MediosDePagoModal from './components/MediosDePagoModal';
 
 export default function App() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -19,37 +27,30 @@ export default function App() {
   const [listaActiva, setListaActiva] = useState<ListaDoc | null>(null);
   const [loadingListas, setLoadingListas] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [mediosDePago, setMediosDePago] = useState<MedioDePago[]>([]);
   const [copiado, setCopiado] = useState(false);
+  const [mostrarMedios, setMostrarMedios] = useState(false);
+
+  // Editar nombre de lista
+  const [editandoNombre, setEditandoNombre] = useState(false);
+  const [nuevoNombre, setNuevoNombre] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const listaActivaRef = useRef<ListaDoc | null>(null);
   useEffect(() => { listaActivaRef.current = listaActiva; }, [listaActiva]);
 
-  // Estado
-  const [editandoNombre, setEditandoNombre] = useState(false);
-  const [nuevoNombre, setNuevoNombre] = useState('');
-
   const [modalState, setModalState] = useState<ModalState>({
-    isOpen: false,
-    type: '',
-    categoryId: null,
-    productId: null,
-    editData: null,
+    isOpen: false, type: '', categoryId: null, productId: null, editData: null,
   });
 
   const [detailsModal, setDetailsModal] = useState<DetailsModalState>({
-    isOpen: false,
-    type: null,
+    isOpen: false, type: null,
   });
 
-
-
-  // Cargar todas las listas del usuario
+  // Cargar listas del usuario
   useEffect(() => {
     if (!user) {
-      setListas([]);
-      setListaActiva(null);
-      setCategories([]);
+      setListas([]); setListaActiva(null); setCategories([]); setMediosDePago([]);
       return;
     }
     setLoadingListas(true);
@@ -61,57 +62,52 @@ export default function App() {
   // Suscribirse en tiempo real cuando hay lista activa
   useEffect(() => {
     if (!listaActiva) return;
-
-    const unsub = suscribirseALista(listaActiva.id, (cats) => {
-      setCategories(cats);
+    const unsub = suscribirseALista(listaActiva.id, ({ categorias, mediosDePago: mdp }) => {
+      setCategories(categorias);
+      setMediosDePago(mdp);
     });
-
     return () => unsub();
   }, [listaActiva]);
 
   const guardar = (cats: Category[]) => {
-    if (listaActivaRef.current) {
-      guardarCategorias(listaActivaRef.current.id, cats);
-    }
-  };
-
-  // Handler
-  const handleRenombrar = async () => {
-    if (!listaActiva || !nuevoNombre.trim()) return;
-    await renombrarLista(listaActiva.id, nuevoNombre.trim());
-    setListaActiva(prev => prev ? { ...prev, nombre: nuevoNombre.trim() } : prev);
-    setEditandoNombre(false);
+    if (listaActivaRef.current) guardarCategorias(listaActivaRef.current.id, cats);
   };
 
   const handleEntrarLista = (lista: ListaDoc) => {
     setListaActiva(lista);
     setCategories(lista.categorias);
+    setMediosDePago(lista.mediosDePago ?? []);
   };
 
   const handleListaCreada = (lista: ListaDoc) => {
-    setListas(prev => {
-      const existe = prev.find(l => l.id === lista.id);
-      if (existe) return prev;
-      return [...prev, lista];
-    });
+    setListas(prev => prev.find(l => l.id === lista.id) ? prev : [...prev, lista]);
     handleEntrarLista(lista);
   };
 
   const handleVolverAListas = () => {
-    setListaActiva(null);
-    setCategories([]);
-    // Recargar listas por si hubo cambios
-    if (user) {
-      obtenerListasDeUsuario(user.uid).then(ls => setListas(ls));
-    }
+    setListaActiva(null); setCategories([]); setMediosDePago([]);
+    if (user) obtenerListasDeUsuario(user.uid).then(ls => setListas(ls));
   };
 
   const handleAbandonarLista = async () => {
     if (!user || !listaActiva) return;
-    if (!confirm(`¿Abandonar la lista "${listaActiva.nombre}"? Podrás volver a unirte con el código.`)) return;
+    if (!confirm(`¿Abandonar la lista "${listaActiva.nombre}"?`)) return;
     await abandonarLista(user.uid, listaActiva.id);
     setListas(prev => prev.filter(l => l.id !== listaActiva.id));
     handleVolverAListas();
+  };
+
+  const handleRenombrar = async () => {
+    if (!listaActiva || !nuevoNombre.trim()) { setEditandoNombre(false); return; }
+    await renombrarLista(listaActiva.id, nuevoNombre.trim());
+    setListaActiva(prev => prev ? { ...prev, nombre: nuevoNombre.trim() } : prev);
+    setEditandoNombre(false);
+  };
+
+  const handleGuardarMedios = (medios: MedioDePago[]) => {
+    if (!listaActiva) return;
+    setMediosDePago(medios);
+    guardarMediosDePago(listaActiva.id, medios);
   };
 
   // --- TOTALS ---
@@ -146,16 +142,9 @@ export default function App() {
     reader.onload = (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
-        if (Array.isArray(parsed)) {
-          setCategories(parsed);
-          guardar(parsed);
-          alert('¡Lista importada con éxito!');
-        } else {
-          alert('El formato del archivo no es válido.');
-        }
-      } catch {
-        alert('Error al leer el archivo JSON.');
-      }
+        if (Array.isArray(parsed)) { setCategories(parsed); guardar(parsed); alert('¡Lista importada!'); }
+        else alert('Formato inválido.');
+      } catch { alert('Error al leer el archivo.'); }
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -179,12 +168,11 @@ export default function App() {
   const closeModal = () =>
     setModalState({ isOpen: false, type: '', categoryId: null, productId: null, editData: null });
 
-  // --- CRUD HANDLERS ---
+  // --- CRUD ---
   const handleToggleProduct = (catId: string, prodId: string) => {
     setCategories(prev => {
       const updated = prev.map(cat =>
-        cat.id !== catId
-          ? cat
+        cat.id !== catId ? cat
           : { ...cat, products: cat.products.map(p => p.id === prodId ? { ...p, adquirido: !p.adquirido } : p) }
       );
       guardar(updated);
@@ -193,23 +181,16 @@ export default function App() {
   };
 
   const handleDeleteCategory = (catId: string) => {
-    if (confirm('¿Eliminar este ambiente y todos sus productos?')) {
-      setCategories(prev => {
-        const updated = prev.filter(c => c.id !== catId);
-        guardar(updated);
-        return updated;
-      });
+    if (confirm('¿Eliminar esta categoría y todos sus items?')) {
+      setCategories(prev => { const u = prev.filter(c => c.id !== catId); guardar(u); return u; });
     }
   };
 
   const handleDeleteProduct = (catId: string, prodId: string) => {
-    if (confirm('¿Eliminar este producto?')) {
+    if (confirm('¿Eliminar este item?')) {
       setCategories(prev => {
-        const updated = prev.map(cat =>
-          cat.id !== catId ? cat : { ...cat, products: cat.products.filter(p => p.id !== prodId) }
-        );
-        guardar(updated);
-        return updated;
+        const u = prev.map(cat => cat.id !== catId ? cat : { ...cat, products: cat.products.filter(p => p.id !== prodId) });
+        guardar(u); return u;
       });
     }
   };
@@ -217,25 +198,20 @@ export default function App() {
   const handleDeleteAlternative = (catId: string, prodId: string, altId: string) => {
     if (confirm('¿Eliminar esta alternativa?')) {
       setCategories(prev => {
-        const updated = prev.map(cat =>
-          cat.id !== catId
-            ? cat
-            : {
-              ...cat,
-              products: cat.products.map(prod =>
-                prod.id !== prodId
-                  ? prod
-                  : { ...prod, alternativas: prod.alternativas.filter(a => a.id !== altId) }
-              ),
-            }
+        const u = prev.map(cat =>
+          cat.id !== catId ? cat : {
+            ...cat,
+            products: cat.products.map(prod =>
+              prod.id !== prodId ? prod
+                : { ...prod, alternativas: prod.alternativas.filter(a => a.id !== altId) }
+            ),
+          }
         );
-        guardar(updated);
-        return updated;
+        guardar(u); return u;
       });
     }
   };
 
-  // Swap alternativa ↔ principal
   const handleSwapAlternative = (catId: string, prodId: string, altId: string) => {
     setCategories(prev => {
       const updated = prev.map(cat => {
@@ -244,32 +220,16 @@ export default function App() {
           ...cat,
           products: cat.products.map(prod => {
             if (prod.id !== prodId) return prod;
-
             const alt = prod.alternativas.find(a => a.id === altId);
             if (!alt) return prod;
-
-            // El producto actual baja a alternativa
-            const anteriorComoAlternativa: Alternative = {
-              id: generateId(),
-              nombre: prod.nombre,
-              tienda: prod.tienda,
-              precio: prod.precio,
-              link: prod.link,
-              imagen: prod.imagen,
+            const anteriorComoAlt: Alternative = {
+              id: generateId(), nombre: prod.nombre, tienda: prod.tienda,
+              precio: prod.precio, link: prod.link, imagen: prod.imagen,
             };
-
-            // La alternativa sube a principal
             const newProd: Product = {
-              ...prod,
-              nombre: alt.nombre,
-              tienda: alt.tienda,
-              precio: alt.precio,
-              link: alt.link,
-              imagen: alt.imagen,
-              alternativas: [
-                anteriorComoAlternativa,
-                ...prod.alternativas.filter(a => a.id !== altId),
-              ],
+              ...prod, nombre: alt.nombre, tienda: alt.tienda,
+              precio: alt.precio, link: alt.link, imagen: alt.imagen,
+              alternativas: [anteriorComoAlt, ...prod.alternativas.filter(a => a.id !== altId)],
             };
             return newProd;
           }),
@@ -290,11 +250,9 @@ export default function App() {
       let updated = prev;
 
       if (type === 'category') {
-        if (editData) {
-          updated = prev.map(c => c.id === (editData as Category).id ? { ...c, name: data.name } : c);
-        } else {
-          updated = [...prev, { id: generateId(), name: data.name, products: [] }];
-        }
+        updated = editData
+          ? prev.map(c => c.id === (editData as Category).id ? { ...c, name: data.name } : c)
+          : [...prev, { id: generateId(), name: data.name, products: [] }];
       } else if (type === 'product') {
         const productObj: Product = {
           id: editData ? (editData as Product).id : generateId(),
@@ -305,6 +263,7 @@ export default function App() {
           link: data.link ?? '',
           imagen: data.imagen ?? '',
           alternativas: editData ? (editData as Product).alternativas : [],
+          medioDePagoId: data.medioDePagoId || null,
         };
         updated = prev.map(cat => {
           if (cat.id !== categoryId) return cat;
@@ -318,11 +277,8 @@ export default function App() {
       } else if (type === 'alternative') {
         const altObj: Alternative = {
           id: editData ? (editData as Alternative).id : generateId(),
-          nombre: data.nombre,
-          tienda: data.tienda ?? '',
-          precio: Number(data.precio) || 0,
-          link: data.link ?? '',
-          imagen: data.imagen ?? '',
+          nombre: data.nombre, tienda: data.tienda ?? '',
+          precio: Number(data.precio) || 0, link: data.link ?? '', imagen: data.imagen ?? '',
         };
         updated = prev.map(cat => {
           if (cat.id !== categoryId) return cat;
@@ -349,35 +305,29 @@ export default function App() {
   };
 
   // --- RENDER STATES ---
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <Loader2 size={28} className="text-emerald-500 animate-spin" />
-      </div>
-    );
-  }
+  if (authLoading) return (
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+      <Loader2 size={28} className="text-emerald-500 animate-spin" />
+    </div>
+  );
 
   if (!user) return <LoginScreen />;
 
-  // Sin lista activa → Mis Listas
-  if (!listaActiva) {
-    return (
-      <MisListas
-        listas={listas}
-        loadingListas={loadingListas}
-        onEntrar={handleEntrarLista}
-        onListaCreada={handleListaCreada}
-      />
-    );
-  }
+  if (!listaActiva) return (
+    <MisListas
+      listas={listas}
+      loadingListas={loadingListas}
+      onEntrar={handleEntrarLista}
+      onListaCreada={handleListaCreada}
+    />
+  );
 
-  // Lista activa → Vista de lista
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans pb-24">
 
       <Header
-        totals={globalTotals}
         nombreLista={listaActiva.nombre}
+        totals={globalTotals}
         onExport={handleExport}
         onImportClick={() => fileInputRef.current?.click()}
         onShowAdquiridos={() => setDetailsModal({ isOpen: true, type: 'adquiridos' })}
@@ -387,10 +337,10 @@ export default function App() {
 
       <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".json" />
 
-      {/* Barra de navegación + acciones */}
+      {/* Barra de navegación */}
       <div className="max-w-5xl mx-auto px-3 sm:px-4 pt-3 flex items-center justify-between gap-3 flex-wrap">
 
-        {/* Izquierda: volver + nombre lista */}
+        {/* Izquierda: volver + nombre editable */}
         <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={handleVolverAListas}
@@ -411,14 +361,16 @@ export default function App() {
           ) : (
             <button
               onClick={() => { setNuevoNombre(listaActiva.nombre); setEditandoNombre(true); }}
-              className="text-xs font-semibold text-zinc-300 hover:text-zinc-100 truncate transition-colors"
+              className="flex items-center gap-1 text-xs font-semibold text-zinc-300 hover:text-zinc-100 transition-colors group"
             >
               {listaActiva.nombre}
+              <Edit2 size={10} className="text-zinc-600 group-hover:text-zinc-400 ml-0.5" />
             </button>
-          )}        </div>
+          )}
+        </div>
 
-        {/* Derecha: código + abandonar + logout */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Derecha: código + medios de pago + abandonar + logout */}
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={copiarCodigo}
             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs font-medium text-zinc-400 transition-colors active:scale-95"
@@ -428,17 +380,25 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setMostrarMedios(true)}
+            title="Medios de pago"
+            className="p-1.5 text-zinc-600 hover:text-emerald-400 transition-colors"
+          >
+            <CreditCard size={15} />
+          </button>
+
+          <button
             onClick={handleAbandonarLista}
-            className="flex items-center gap-1 p-1.5 text-zinc-600 hover:text-amber-400 transition-colors"
             title="Abandonar lista"
+            className="p-1.5 text-zinc-600 hover:text-amber-400 transition-colors"
           >
             <DoorOpen size={15} />
           </button>
 
           <button
             onClick={logout}
-            className="flex items-center gap-1 p-1.5 text-zinc-600 hover:text-red-400 transition-colors"
             title="Cerrar sesión"
+            className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors"
           >
             <LogOut size={15} />
           </button>
@@ -450,6 +410,7 @@ export default function App() {
           <CategoryCard
             key={category.id}
             category={category}
+            mediosDePago={mediosDePago}
             onEditCategory={() => openModal('category', category.id, null, category)}
             onDeleteCategory={() => handleDeleteCategory(category.id)}
             onToggleProduct={(prodId) => handleToggleProduct(category.id, prodId)}
@@ -474,13 +435,28 @@ export default function App() {
         </button>
       </main>
 
-      <FormModal modalState={modalState} onClose={closeModal} onSubmit={handleModalSubmit} />
+      <FormModal
+        modalState={modalState}
+        mediosDePago={mediosDePago}
+        onClose={closeModal}
+        onSubmit={handleModalSubmit}
+      />
+
       <DetailsModal
         isOpen={detailsModal.isOpen}
         type={detailsModal.type}
         categories={categories}
+        mediosDePago={mediosDePago}
         onClose={() => setDetailsModal({ isOpen: false, type: null })}
       />
+
+      {mostrarMedios && (
+        <MediosDePagoModal
+          medios={mediosDePago}
+          onClose={() => setMostrarMedios(false)}
+          onGuardar={handleGuardarMedios}
+        />
+      )}
     </div>
   );
 }

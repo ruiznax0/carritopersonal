@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Plus, Trash2, Edit } from 'lucide-react';
-import type { Category, Alternative } from '../types';
+import type { Category, Alternative, MedioDePago } from '../types';
 import { formatMoney } from '../utils/helpers';
 import ProductItem from './ProductItem';
 
@@ -16,6 +16,7 @@ interface CategoryCardProps {
   onEditAlternative: (prodId: string, alt: Alternative) => void;
   onDeleteAlternative: (prodId: string, altId: string) => void;
   onSwapAlternative: (prodId: string, altId: string) => void;
+  mediosDePago: MedioDePago[];
 }
 
 export default function CategoryCard({
@@ -30,6 +31,7 @@ export default function CategoryCard({
   onEditAlternative,
   onDeleteAlternative,
   onSwapAlternative,
+  mediosDePago,
 }: CategoryCardProps) {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -119,6 +121,7 @@ export default function CategoryCard({
                   if (alt) onEditAlternative(product.id, alt);
                 }}
                 onDeleteAlternative={(altId) => onDeleteAlternative(product.id, altId)}
+                mediosDePago={mediosDePago}
                 onSwapAlternative={(altId) => onSwapAlternative(product.id, altId)}
               />
             ))}

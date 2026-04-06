@@ -1,3 +1,9 @@
+export interface MedioDePago {
+  id: string;
+  nombre: string;
+  color: string; // tailwind bg color class ej: 'bg-blue-500'
+}
+
 export interface Alternative {
   id: string;
   nombre: string;
@@ -16,6 +22,7 @@ export interface Product {
   link: string;
   imagen: string;
   alternativas: Alternative[];
+  medioDePagoId?: string | null;
 }
 
 export interface Category {

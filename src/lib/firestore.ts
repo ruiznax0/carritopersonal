@@ -9,7 +9,7 @@ import {
   arrayRemove,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Category } from '../types';
+import type { Category, MedioDePago } from '../types';
 
 export interface ListaDoc {
   id: string;
@@ -18,6 +18,7 @@ export interface ListaDoc {
   colaboradores: string[];
   codigoInvitacion: string;
   categorias: Category[];
+  mediosDePago: MedioDePago[];
   updatedAt: unknown;
 }
 
@@ -27,7 +28,6 @@ const generarCodigo = (): string =>
 const generarListaId = (): string =>
   Math.random().toString(36).substring(2, 11);
 
-// Crear una lista nueva
 export const crearLista = async (
   uid: string,
   nombre: string,
@@ -42,18 +42,17 @@ export const crearLista = async (
     colaboradores: [uid],
     codigoInvitacion: codigo,
     categorias,
+    mediosDePago: [],
     updatedAt: serverTimestamp(),
   };
 
   await setDoc(doc(db, 'listas', listaId), lista);
   await setDoc(doc(db, 'invitaciones', codigo), { listaId });
-  // Guardar en array de listas del usuario
   await setDoc(doc(db, 'usuarios', uid), { listaIds: arrayUnion(listaId) }, { merge: true });
 
   return { id: listaId, ...lista };
 };
 
-// Unirse con código
 export const unirseALista = async (
   uid: string,
   codigo: string
@@ -79,14 +78,11 @@ export const unirseALista = async (
   return { id: listaId, ...listaData };
 };
 
-// Obtener todas las listas del usuario
 export const obtenerListasDeUsuario = async (uid: string): Promise<ListaDoc[]> => {
   const usuarioSnap = await getDoc(doc(db, 'usuarios', uid));
   if (!usuarioSnap.exists()) return [];
 
   const data = usuarioSnap.data() as { listaIds?: string[]; listaId?: string };
-
-  // Compatibilidad con el modelo anterior (listaId singular)
   const ids = data.listaIds ?? (data.listaId ? [data.listaId] : []);
   if (ids.length === 0) return [];
 
@@ -94,39 +90,39 @@ export const obtenerListasDeUsuario = async (uid: string): Promise<ListaDoc[]> =
     ids.map(async (id) => {
       const snap = await getDoc(doc(db, 'listas', id));
       if (!snap.exists()) return null;
-      return { id, ...snap.data() } as ListaDoc;
+      const d = snap.data() as Omit<ListaDoc, 'id'>;
+      // Compatibilidad: listas antiguas sin mediosDePago
+      return { id, ...d, mediosDePago: d.mediosDePago ?? [] } as ListaDoc;
     })
   );
 
   return listas.filter(Boolean) as ListaDoc[];
 };
 
-// Abandonar una lista
 export const abandonarLista = async (uid: string, listaId: string): Promise<void> => {
-  // Quitar de las listas del usuario
-  await updateDoc(doc(db, 'usuarios', uid), {
-    listaIds: arrayRemove(listaId),
-  });
-  // Quitar de colaboradores de la lista
-  await updateDoc(doc(db, 'listas', listaId), {
-    colaboradores: arrayRemove(uid),
-  });
+  await updateDoc(doc(db, 'usuarios', uid), { listaIds: arrayRemove(listaId) });
+  await updateDoc(doc(db, 'listas', listaId), { colaboradores: arrayRemove(uid) });
 };
 
-// Suscribirse a cambios en tiempo real
+export const renombrarLista = async (listaId: string, nombre: string): Promise<void> => {
+  await updateDoc(doc(db, 'listas', listaId), { nombre });
+};
+
 export const suscribirseALista = (
   listaId: string,
-  onUpdate: (categorias: Category[]) => void
+  onUpdate: (data: Pick<ListaDoc, 'categorias' | 'mediosDePago'>) => void
 ): (() => void) => {
   return onSnapshot(doc(db, 'listas', listaId), (snap) => {
     if (snap.exists()) {
       const data = snap.data() as Omit<ListaDoc, 'id'>;
-      onUpdate(data.categorias);
+      onUpdate({
+        categorias: data.categorias,
+        mediosDePago: data.mediosDePago ?? [],
+      });
     }
   });
 };
 
-// Guardar categorías
 export const guardarCategorias = async (
   listaId: string,
   categorias: Category[]
@@ -137,6 +133,9 @@ export const guardarCategorias = async (
   });
 };
 
-export const renombrarLista = async (listaId: string, nombre: string): Promise<void> => {
-  await updateDoc(doc(db, 'listas', listaId), { nombre });
+export const guardarMediosDePago = async (
+  listaId: string,
+  mediosDePago: MedioDePago[]
+): Promise<void> => {
+  await updateDoc(doc(db, 'listas', listaId), { mediosDePago });
 };
